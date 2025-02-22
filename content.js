@@ -1,69 +1,91 @@
-document.addEventListener("DOMContentLoaded", () => {
-  browser.runtime.sendMessage({ type: "getUserData" }).then((response) => {
+function fillForms(userData, mapping) {
+  console.log("Formality: Attempting to fill forms with data:", userData); // Debug
+
+  const fields = document.querySelectorAll("input, textarea, select");
+
+  // Handle multi-line address
+  const addressFields = Array.from(fields).filter(
+    (field) =>
+      mapping.address.some(
+        (attr) =>
+          field.name?.toLowerCase().includes(attr) ||
+          field.id?.toLowerCase().includes(attr),
+      ) ||
+      mapping.address2.some(
+        (attr) =>
+          field.name?.toLowerCase().includes(attr) ||
+          field.id?.toLowerCase().includes(attr),
+      ),
+  );
+  const fullAddress = userData.address || "";
+  if (addressFields.length === 1) {
+    addressFields[0].value = fullAddress;
+  } else if (addressFields.length >= 2) {
+    const lines = fullAddress.split(", ");
+    addressFields[0].value = lines[0] || "";
+    addressFields[1].value = lines[1] || userData.address2 || "";
+  }
+
+  // Fill other fields
+  fields.forEach((field) => {
+    const attr = (field.name || field.id || "").toLowerCase();
+    let labelAttr = "";
+    const label = document.querySelector(`label[for="${field.id}"]`);
+    if (label) {
+      labelAttr = label.textContent.toLowerCase().trim();
+    }
+
+    for (const [dataKey, attrNames] of Object.entries(mapping)) {
+      if (
+        attrNames.some((name) => attr.includes(name)) ||
+        (labelAttr && attrNames.some((name) => labelAttr.includes(name)))
+      ) {
+        if (field.tagName.toLowerCase() === "select") {
+          const option = Array.from(field.options).find(
+            (opt) =>
+              opt.value.toLowerCase() ===
+                (userData[dataKey] || "").toLowerCase() ||
+              opt.text.toLowerCase() ===
+                (userData[dataKey] || "").toLowerCase(),
+          );
+          if (option) {
+            field.value = option.value;
+            console.log(
+              `Formality: Filled select ${attr} with ${option.value}`,
+            ); // Debug
+          }
+        } else if (!addressFields.includes(field)) {
+          field.value = userData[dataKey] || "";
+          console.log(`Formality: Filled ${attr} with ${userData[dataKey]}`); // Debug
+        }
+        break;
+      }
+    }
+  });
+}
+
+// Initial run and dynamic updates
+browser.runtime
+  .sendMessage({ type: "getUserData" })
+  .then((response) => {
     const userData = response.userData;
     const mapping = response.mapping;
 
-    if (!userData) return;
-
-    // Find all inputs, textareas, and selects
-    const fields = document.querySelectorAll("input, textarea, select");
-
-    // Handle multi-line address logic
-    const addressFields = Array.from(fields).filter(
-      (field) =>
-        mapping.address.some(
-          (attr) =>
-            field.name?.toLowerCase().includes(attr) ||
-            field.id?.toLowerCase().includes(attr),
-        ) ||
-        mapping.address2.some(
-          (attr) =>
-            field.name?.toLowerCase().includes(attr) ||
-            field.id?.toLowerCase().includes(attr),
-        ),
-    );
-    const fullAddress = userData.address || "";
-    if (addressFields.length === 1) {
-      addressFields[0].value = fullAddress; // Single field gets full address
-    } else if (addressFields.length >= 2) {
-      const lines = fullAddress.split(", "); // Split on comma + space, adjust as needed
-      addressFields[0].value = lines[0] || ""; // First line (street)
-      addressFields[1].value = lines[1] || userData.address2 || ""; // Second line (apt/unit)
+    if (!userData) {
+      console.log("Formality: No user data found, skipping.");
+      return;
     }
 
-    // Fill other fields
-    fields.forEach((field) => {
-      const attr = (field.name || field.id || "").toLowerCase();
-      let labelAttr = "";
+    // Fill forms immediately
+    fillForms(userData, mapping);
 
-      // Check associated label’s "for" attribute
-      const label = document.querySelector(`label[for="${field.id}"]`);
-      if (label) {
-        labelAttr = label.textContent.toLowerCase().trim();
-      }
-
-      for (const [dataKey, attrNames] of Object.entries(mapping)) {
-        if (
-          attrNames.some((name) => attr.includes(name)) || // Match name/id
-          (labelAttr && attrNames.some((name) => labelAttr.includes(name))) // Match label
-        ) {
-          if (field.tagName.toLowerCase() === "select") {
-            // Handle dropdowns (e.g., city, state)
-            const option = Array.from(field.options).find(
-              (opt) =>
-                opt.value.toLowerCase() ===
-                  (userData[dataKey] || "").toLowerCase() ||
-                opt.text.toLowerCase() ===
-                  (userData[dataKey] || "").toLowerCase(),
-            );
-            if (option) field.value = option.value;
-          } else if (!addressFields.includes(field)) {
-            // Handle text inputs (skip address fields already processed)
-            field.value = userData[dataKey] || "";
-          }
-          break;
-        }
-      }
+    // Watch for dynamically added forms
+    const observer = new MutationObserver(() => {
+      console.log("Formality: Detected DOM change, checking for new forms.");
+      fillForms(userData, mapping);
     });
+    observer.observe(document.body, { childList: true, subtree: true });
+  })
+  .catch((error) => {
+    console.error("Formality: Error fetching user data:", error);
   });
-});

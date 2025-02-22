@@ -1,4 +1,22 @@
-// Add this at the top of the file
+function loadSettings() {
+  browser.storage.local
+    .get("userData")
+    .then((result) => {
+      const userData = result.userData || {};
+      document.getElementById("firstName").value = userData.firstName || "";
+      document.getElementById("lastName").value = userData.lastName || "";
+      document.getElementById("address").value = userData.address || "";
+      document.getElementById("address2").value = userData.address2 || "";
+      document.getElementById("city").value = userData.city || "";
+      document.getElementById("state").value = userData.state || "";
+      document.getElementById("zip").value = userData.zip || "";
+      document.getElementById("email").value = userData.email || "";
+    })
+    .catch((error) => {
+      console.error("Formality: Error loading settings:", error);
+    });
+}
+
 function showNotification(message) {
   // Create notification if it doesn't exist
   let notification = document.querySelector(".save-notification");
@@ -24,9 +42,15 @@ document.getElementById("userForm").addEventListener("submit", (event) => {
   formData.forEach((value, key) => {
     userData[key] = value;
   });
-  browser.storage.local.set({ userData }).then(() => {
-    showNotification("Settings saved successfully!");
-  });
+  browser.storage.local
+    .set({ userData })
+    .then(() => {
+      showNotification("Settings saved successfully!");
+    })
+    .catch((error) => {
+      console.error("Formality: Error saving settings:", error);
+    });
 });
 
-/* Add these styles at the end of your CSS file */
+// Load settings when the options page opens
+loadSettings();
