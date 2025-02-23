@@ -25,8 +25,6 @@ function fillForms(userData, mapping) {
     addressFields[0].value = lines[0] || "";
     addressFields[1].value = lines[1] || userData.address2 || "";
   }
-
-  // Fill other fields
   fields.forEach((field) => {
     const attr = (field.name || field.id || "").toLowerCase();
     let labelAttr = "";
@@ -34,37 +32,64 @@ function fillForms(userData, mapping) {
     if (label) {
       labelAttr = label.textContent.toLowerCase().trim();
     }
+    console.log(`Formality: Checking field ${attr} with label '${labelAttr}'`);
 
+    let filled = false;
     for (const [dataKey, attrNames] of Object.entries(mapping)) {
-      if (
-        attrNames.some((name) => attr.includes(name)) ||
-        (labelAttr && attrNames.some((name) => labelAttr.includes(name)))
-      ) {
+      const isMatch = attrNames.some((name) =>
+        name.length > 2
+          ? attr.includes(name) || labelAttr.includes(name)
+          : attr === name || labelAttr === name,
+      );
+      // Block lastName if it’s a substring of a fullName-like field
+      let isBlocked = false;
+      if (dataKey === "lastName") {
+        const sysFullNameAttrs = mapping.fullNameSys;
+        isBlocked = sysFullNameAttrs.some(
+          (fullAttr) =>
+            attr.includes(fullAttr) &&
+            attr !== fullAttr &&
+            attr.endsWith("lname"),
+        );
+        if (isBlocked) {
+          console.log(
+            `Formality: Blocked lastName match for ${attr} due to fullName overlap`,
+          );
+          continue;
+        }
+      }
+      if (isMatch) {
+        let value = userData[dataKey];
+        if (dataKey === "fullName" && !value) {
+          value =
+            `${userData.firstName || ""} ${userData.lastName || ""}`.trim();
+        }
         if (field.tagName.toLowerCase() === "select") {
           const option = Array.from(field.options).find(
             (opt) =>
-              opt.value.toLowerCase() ===
-                (userData[dataKey] || "").toLowerCase() ||
-              opt.text.toLowerCase() ===
-                (userData[dataKey] || "").toLowerCase(),
+              opt.value.toLowerCase() === (value || "").toLowerCase() ||
+              opt.text.toLowerCase() === (value || "").toLowerCase(),
           );
           if (option) {
             field.value = option.value;
             console.log(
-              `Formality: Filled select ${attr} with ${option.value}`,
-            ); // Debug
+              `Formality: Filled select ${attr} with ${option.value} (key: ${dataKey})`,
+            );
+            filled = true;
           }
         } else if (!addressFields.includes(field)) {
-          field.value = userData[dataKey] || "";
-          console.log(`Formality: Filled ${attr} with ${userData[dataKey]}`); // Debug
+          field.value = value || "";
+          console.log(
+            `Formality: Filled ${attr} with '${value}' (key: ${dataKey})`,
+          );
+          filled = true;
         }
-        break;
+        if (filled) break; // Exit loop after filling
       }
     }
   });
 }
 
-// Initial run and dynamic updates
 browser.runtime
   .sendMessage({ type: "getUserData" })
   .then((response) => {
@@ -76,15 +101,19 @@ browser.runtime
       return;
     }
 
-    // Fill forms immediately
-    fillForms(userData, mapping);
+    fillForms(userData, mapping); // Initial run
 
-    // Watch for dynamically added forms
     const observer = new MutationObserver(() => {
       console.log("Formality: Detected DOM change, checking for new forms.");
       fillForms(userData, mapping);
     });
     observer.observe(document.body, { childList: true, subtree: true });
+
+    // Stop after 10 seconds
+    setTimeout(() => {
+      observer.disconnect();
+      console.log("Formality: Stopped observing after 10 seconds.");
+    }, 10000);
   })
   .catch((error) => {
     console.error("Formality: Error fetching user data:", error);

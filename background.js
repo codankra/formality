@@ -5,6 +5,7 @@ const attributeMapping = {
     "first_name",
     "first-name",
     "fname",
+    "frstname",
     "givenname",
     "given_name",
     "given-name",
@@ -25,6 +26,8 @@ const attributeMapping = {
     "l_name",
     "l-name",
   ],
+  fullName: ["fullname", "full_name", "name", "full-name"],
+  fullNameSys: ["fullname", "full_name", "full-name"],
   address: [
     "address",
     "street",
@@ -59,9 +62,9 @@ const attributeMapping = {
     "region",
     "state_province",
     "state-province",
-    "st",
     "state_code",
     "state-code",
+    "st",
   ],
   zip: [
     "zip",
@@ -90,6 +93,6 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     browser.storage.local.get("userData").then((result) => {
       sendResponse({ userData: result.userData, mapping: attributeMapping });
     });
-    return true; // Async response
+    return true;
   }
 });
